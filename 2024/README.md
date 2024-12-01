@@ -4,6 +4,7 @@ This repository contains my solutions for the [Advent of Code 2024](https://adve
 
 ## Project Structure
 
+```
 .
 ├── cmd/
 │ └── main.go # Main application entry point
@@ -11,6 +12,7 @@ This repository contains my solutions for the [Advent of Code 2024](https://adve
 │ └── day_1.go # Solutions for individual days
 ├── go.mod # Go module definition
 └── README.md # This file
+```
 
 ## Prerequisites
 
