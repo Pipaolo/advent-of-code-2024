@@ -6,5 +6,5 @@ import (
 
 func main() {
 	// days.StartDay1()
-	days.StartDay2()
+	days.StartDay2Part2()
 }
