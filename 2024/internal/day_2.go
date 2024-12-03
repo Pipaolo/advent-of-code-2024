@@ -22,7 +22,7 @@ type Level struct {
 func (r *Report) IsSafeWithDampener() bool {
 
 	// If the report is safe without the dampener, then return true
-	if r.IsSafe() {
+	if r.IsSafe(){ 
 		return true
 	}
 
