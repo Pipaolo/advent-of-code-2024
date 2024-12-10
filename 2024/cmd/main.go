@@ -11,5 +11,6 @@ func main() {
 	// days.StartDay4Part1()
 	// days.StartDay4Part2()
 	// days.StartDay5Part1()
-	days.StartDay5Part2()
+	// days.StartDay5Part2()
+	days.StartDay6Part1()
 }

@@ -10,5 +10,5 @@ func ParseFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return strings.Split(string(content), "\n"), nil
+	return strings.Split(strings.TrimSpace(string(content)), "\n"), nil
 }
