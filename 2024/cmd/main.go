@@ -7,5 +7,7 @@ import (
 func main() {
 	// days.StartDay1()
 	// days.StartDay2Part2()
-	days.StartDay3Part1()
+	// days.StartDay3Part1()
+	// days.StartDay4Part1()
+	days.StartDay4Part2()
 }
