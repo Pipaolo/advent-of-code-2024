@@ -11,7 +11,7 @@ const day = 4
 
 func main() {
 	// Set to true to use example input for debugging
-	useExample := false
+	useExample := true
 
 	var input *parser.Input
 	var err error
