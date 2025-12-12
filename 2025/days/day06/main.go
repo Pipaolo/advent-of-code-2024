@@ -11,8 +11,11 @@ import (
 
 const day = 6
 
+// Set to true to see step-by-step debug output
+const DEBUG = true
+
 func main() {
-	useExample := false
+	useExample := true // Use example for learning
 
 	var input *parser.Input
 	var err error
@@ -29,153 +32,363 @@ func main() {
 
 	fmt.Printf("=== Day %d ===\n", day)
 	fmt.Printf("Part 1: %v\n", solvePart1(input))
+	fmt.Println()
 	fmt.Printf("Part 2: %v\n", solvePart2(input))
 }
 
-// buildGrid converts input lines into a 2D byte grid with uniform width
-func buildGrid(lines []string) [][]byte {
-	maxLen := 0
-	for _, line := range lines {
-		if len(line) > maxLen {
-			maxLen = len(line)
-		}
-	}
+// =============================================================================
+// PART 1: HORIZONTAL READING
+// =============================================================================
+//
+// Input looks like:
+//   123 328  51 64
+//    45 64  387 23
+//     6 98  215 314
+//   *   +   *   +
+//
+// We split each row by spaces and group by POSITION:
+//   Position 0: [123, 45, 6, *]   → 123 * 45 * 6
+//   Position 1: [328, 64, 98, +]  → 328 + 64 + 98
+//   Position 2: [51, 387, 215, *] → 51 * 387 * 215
+//   Position 3: [64, 23, 314, +]  → 64 + 23 + 314
+//
+// =============================================================================
 
-	grid := make([][]byte, len(lines))
-	for i, line := range lines {
-		grid[i] = make([]byte, maxLen)
-		copy(grid[i], line)
-		for j := len(line); j < maxLen; j++ {
-			grid[i][j] = ' '
-		}
-	}
-	return grid
-}
-
-// isOperator checks if a character is an operator
-func isOperator(ch byte) bool {
-	return ch == '+' || ch == '-' || ch == '*' || ch == '/'
-}
-
-// evaluate applies an operator to a list of numbers
-func evaluate(numbers []int, op byte) int {
-	if len(numbers) == 0 {
-		return 0
-	}
-	result := numbers[0]
-	for i := 1; i < len(numbers); i++ {
-		switch op {
-		case '+':
-			result += numbers[i]
-		case '-':
-			result -= numbers[i]
-		case '*':
-			result *= numbers[i]
-		case '/':
-			result /= numbers[i]
-		}
-	}
-	return result
-}
-
-// solvePart1: Read numbers horizontally, group by token position
 func solvePart1(input *parser.Input) any {
-	// Group numbers by their token index (column position after splitting by spaces)
-	type problem struct {
-		numbers []int
-		op      byte
+	if DEBUG {
+		fmt.Println("========== PART 1: HORIZONTAL READING ==========")
+		fmt.Println()
 	}
-	problems := make(map[int]*problem)
 
-	for _, row := range input.Lines {
-		tokens := strings.Fields(row) // Split by whitespace, removes empty strings
-		for i, token := range tokens {
-			if problems[i] == nil {
-				problems[i] = &problem{}
+	// A problem has a list of numbers and one operator
+	type Problem struct {
+		numbers  []int
+		operator byte
+	}
+
+	// Map from position index → problem
+	// Position 0 is the first token in each row, position 1 is second, etc.
+	problemsByPosition := make(map[int]*Problem)
+
+	// STEP 1: Process each row
+	for rowIndex, rowText := range input.Lines {
+		if DEBUG {
+			fmt.Printf("Row %d: %q\n", rowIndex, rowText)
+		}
+
+		// Split the row by whitespace
+		// strings.Fields automatically handles multiple spaces
+		tokens := strings.Fields(rowText)
+
+		if DEBUG {
+			fmt.Printf("  Tokens: %v\n", tokens)
+		}
+
+		// STEP 2: Assign each token to its position
+		for positionIndex, token := range tokens {
+			// Create problem if it doesn't exist yet
+			if problemsByPosition[positionIndex] == nil {
+				problemsByPosition[positionIndex] = &Problem{}
 			}
-			if len(token) == 1 && isOperator(token[0]) {
-				problems[i].op = token[0]
+
+			currentProblem := problemsByPosition[positionIndex]
+
+			// Check if this token is an operator (+, -, *, /)
+			isOperatorToken := len(token) == 1 && (token[0] == '+' || token[0] == '-' || token[0] == '*' || token[0] == '/')
+
+			if isOperatorToken {
+				currentProblem.operator = token[0]
+				if DEBUG {
+					fmt.Printf("  Position %d: Found operator '%c'\n", positionIndex, token[0])
+				}
 			} else {
-				num, _ := strconv.Atoi(token)
-				problems[i].numbers = append(problems[i].numbers, num)
+				// It's a number
+				number, _ := strconv.Atoi(token)
+				currentProblem.numbers = append(currentProblem.numbers, number)
+				if DEBUG {
+					fmt.Printf("  Position %d: Found number %d\n", positionIndex, number)
+				}
 			}
+		}
+		if DEBUG {
+			fmt.Println()
 		}
 	}
 
-	total := 0
-	for _, p := range problems {
-		total += evaluate(p.numbers, p.op)
+	// STEP 3: Evaluate each problem and sum results
+	if DEBUG {
+		fmt.Println("--- Evaluating Problems ---")
 	}
-	return total
+
+	grandTotal := 0
+	for position := 0; position < len(problemsByPosition); position++ {
+		problem := problemsByPosition[position]
+		result := evaluateWithDebug(problem.numbers, problem.operator, DEBUG)
+		grandTotal += result
+
+		if DEBUG {
+			fmt.Printf("Problem %d: %v %c = %d\n", position, problem.numbers, problem.operator, result)
+		}
+	}
+
+	if DEBUG {
+		fmt.Printf("\nGrand Total: %d\n", grandTotal)
+	}
+
+	return grandTotal
 }
 
-// solvePart2: Read numbers vertically (each column is a number), group by problem blocks
+// =============================================================================
+// PART 2: VERTICAL READING
+// =============================================================================
+//
+// Same input, but now we read COLUMNS instead of rows:
+//
+//   Column:  0 1 2   3   4 5 6   7 8   9 10 11  12 13 14
+//            ─────────────────────────────────────────────
+//   Row 0:   1 2 3       3 2 8         5 1      6  4
+//   Row 1:     4 5       6 4           3 8  7   2  3
+//   Row 2:       6       9 8           2 1  5   3  1  4
+//   Row 3:   *           +             *        +
+//            ─────────────────────────────────────────────
+//            └───┘       └───┘         └─────┘  └──────┘
+//            Prob0       Prob1         Prob 2   Prob 3
+//
+// Each COLUMN becomes a number (read top to bottom):
+//   Column 12: '6','2','3' → 623
+//   Column 13: '4','3','1' → 431
+//   Column 14: ' ',' ','4' → 4
+//
+// =============================================================================
+
 func solvePart2(input *parser.Input) any {
-	grid := buildGrid(input.Lines)
+	if DEBUG {
+		fmt.Println("========== PART 2: VERTICAL READING ==========")
+		fmt.Println()
+	}
+
+	// STEP 1: Convert input to a 2D grid of characters
+	// This makes it easy to access any [row][column]
+	grid := buildGridWithDebug(input.Lines)
 	if len(grid) == 0 {
 		return 0
 	}
 
-	rows, cols := len(grid), len(grid[0])
-	opRow := rows - 1 // Last row contains operators
+	numberOfRows := len(grid)
+	numberOfColumns := len(grid[0])
+	operatorRowIndex := numberOfRows - 1 // Last row has operators
 
-	// Find problem boundaries: columns where ALL rows are spaces
-	isBlank := func(col int) bool {
-		for row := 0; row < rows; row++ {
-			if grid[row][col] != ' ' {
-				return false
-			}
-		}
-		return true
+	if DEBUG {
+		fmt.Println("Grid created:")
+		fmt.Printf("  Rows: %d, Columns: %d\n", numberOfRows, numberOfColumns)
+		fmt.Printf("  Operator row is row %d\n", operatorRowIndex)
+		fmt.Println()
+		printGrid(grid)
+		fmt.Println()
 	}
 
-	total := 0
-
-	// Process each problem block (contiguous non-blank columns)
-	col := 0
-	for col < cols {
-		// Skip blank columns
-		for col < cols && isBlank(col) {
-			col++
+	// STEP 2: Find which columns are "blank" (all spaces)
+	// These blank columns separate different problems
+	isColumnBlank := func(columnIndex int) bool {
+		for rowIndex := 0; rowIndex < numberOfRows; rowIndex++ {
+			character := grid[rowIndex][columnIndex]
+			if character != ' ' {
+				return false // Found a non-space, so column is NOT blank
+			}
 		}
-		if col >= cols {
+		return true // All spaces, column IS blank
+	}
+
+	// STEP 3: Process the grid column by column
+	// We'll find contiguous groups of non-blank columns (these are problems)
+
+	grandTotal := 0
+	problemNumber := 0
+	currentColumn := 0
+
+	for currentColumn < numberOfColumns {
+
+		// STEP 3a: Skip over blank columns (these are separators)
+		for currentColumn < numberOfColumns && isColumnBlank(currentColumn) {
+			currentColumn++
+		}
+
+		// If we've gone past the end, we're done
+		if currentColumn >= numberOfColumns {
 			break
 		}
 
-		// Find the extent of this problem block
-		startCol := col
-		for col < cols && !isBlank(col) {
-			col++
+		// STEP 3b: We found the start of a problem block
+		problemStartColumn := currentColumn
+
+		// Find where this problem block ends (next blank column)
+		for currentColumn < numberOfColumns && !isColumnBlank(currentColumn) {
+			currentColumn++
 		}
-		endCol := col
+		problemEndColumn := currentColumn // This is one past the last column
 
-		// Extract operator and numbers from this block
-		var op byte
-		var numbers []int
+		if DEBUG {
+			fmt.Printf("--- Problem %d: columns %d to %d ---\n",
+				problemNumber, problemStartColumn, problemEndColumn-1)
+		}
 
-		for c := endCol - 1; c >= startCol; c-- { // Right to left
-			// Check for operator on the operator row
-			if isOperator(grid[opRow][c]) {
-				op = grid[opRow][c]
-			}
+		// STEP 3c: Extract the operator and numbers from this block
+		var operatorForThisProblem byte
+		var numbersForThisProblem []int
 
-			// Read vertical number from data rows (top to bottom)
-			numStr := ""
-			for r := 0; r < opRow; r++ {
-				if grid[r][c] >= '0' && grid[r][c] <= '9' {
-					numStr += string(grid[r][c])
+		// We read columns from RIGHT to LEFT (as per the problem description)
+		for col := problemEndColumn - 1; col >= problemStartColumn; col-- {
+
+			// Check if this column has an operator (on the operator row)
+			characterOnOperatorRow := grid[operatorRowIndex][col]
+			if characterOnOperatorRow == '+' || characterOnOperatorRow == '-' ||
+				characterOnOperatorRow == '*' || characterOnOperatorRow == '/' {
+				operatorForThisProblem = characterOnOperatorRow
+				if DEBUG {
+					fmt.Printf("  Column %d: Found operator '%c'\n", col, characterOnOperatorRow)
 				}
 			}
-			if numStr != "" {
-				num, _ := strconv.Atoi(numStr)
-				numbers = append(numbers, num)
+
+			// Read the vertical number from this column
+			// Go through rows 0 to operatorRowIndex-1 (data rows only)
+			digitsFromTopToBottom := ""
+			for row := 0; row < operatorRowIndex; row++ {
+				character := grid[row][col]
+				isDigit := character >= '0' && character <= '9'
+				if isDigit {
+					digitsFromTopToBottom += string(character)
+				}
+			}
+
+			// If we found any digits, convert to a number
+			if digitsFromTopToBottom != "" {
+				number, _ := strconv.Atoi(digitsFromTopToBottom)
+				numbersForThisProblem = append(numbersForThisProblem, number)
+				if DEBUG {
+					fmt.Printf("  Column %d: Digits '%s' → Number %d\n",
+						col, digitsFromTopToBottom, number)
+				}
+			} else {
+				if DEBUG {
+					fmt.Printf("  Column %d: No digits found\n", col)
+				}
 			}
 		}
 
-		if len(numbers) > 0 && op != 0 {
-			total += evaluate(numbers, op)
+		// STEP 3d: Evaluate this problem
+		if len(numbersForThisProblem) > 0 && operatorForThisProblem != 0 {
+			result := evaluateWithDebug(numbersForThisProblem, operatorForThisProblem, DEBUG)
+			grandTotal += result
+			if DEBUG {
+				fmt.Printf("  Result: %v %c = %d\n\n",
+					numbersForThisProblem, operatorForThisProblem, result)
+			}
+		}
+
+		problemNumber++
+	}
+
+	if DEBUG {
+		fmt.Printf("Grand Total: %d\n", grandTotal)
+	}
+
+	return grandTotal
+}
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+// buildGridWithDebug converts input lines into a 2D byte grid with uniform width
+// Each row is padded with spaces to make all rows the same length
+func buildGridWithDebug(lines []string) [][]byte {
+	// Find the longest line
+	maxLength := 0
+	for _, line := range lines {
+		if len(line) > maxLength {
+			maxLength = len(line)
 		}
 	}
 
-	return total
+	// Create the grid
+	grid := make([][]byte, len(lines))
+	for rowIndex, line := range lines {
+		// Create a row with maxLength characters
+		grid[rowIndex] = make([]byte, maxLength)
+
+		// Copy the line content
+		copy(grid[rowIndex], line)
+
+		// Fill the rest with spaces
+		for col := len(line); col < maxLength; col++ {
+			grid[rowIndex][col] = ' '
+		}
+	}
+
+	return grid
+}
+
+// printGrid displays the grid with row and column indices
+func printGrid(grid [][]byte) {
+	if len(grid) == 0 {
+		return
+	}
+
+	// Print column headers
+	fmt.Print("     ")
+	for col := 0; col < len(grid[0]); col++ {
+		fmt.Printf("%2d", col%10)
+	}
+	fmt.Println()
+
+	fmt.Print("     ")
+	for col := 0; col < len(grid[0]); col++ {
+		fmt.Print("──")
+	}
+	fmt.Println()
+
+	// Print each row
+	for row := 0; row < len(grid); row++ {
+		fmt.Printf("%2d │ ", row)
+		for col := 0; col < len(grid[row]); col++ {
+			ch := grid[row][col]
+			if ch == ' ' {
+				fmt.Print(" ·") // Show spaces as dots for visibility
+			} else {
+				fmt.Printf(" %c", ch)
+			}
+		}
+		fmt.Println()
+	}
+}
+
+// evaluateWithDebug applies an operator to a list of numbers
+func evaluateWithDebug(numbers []int, operator byte, debug bool) int {
+	if len(numbers) == 0 {
+		return 0
+	}
+
+	result := numbers[0]
+
+	for i := 1; i < len(numbers); i++ {
+		previousResult := result
+		currentNumber := numbers[i]
+
+		switch operator {
+		case '+':
+			result = result + currentNumber
+		case '-':
+			result = result - currentNumber
+		case '*':
+			result = result * currentNumber
+		case '/':
+			result = result / currentNumber
+		}
+
+		if debug {
+			fmt.Printf("    %d %c %d = %d\n", previousResult, operator, currentNumber, result)
+		}
+	}
+
+	return result
 }
